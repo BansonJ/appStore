@@ -72,7 +72,7 @@ pipeline {
                         // GITOPS_REPO_URL = 'https://github.com/BansonJ/gitOps.git' 여야 합니다.
                         
                         // 2. 브랜치 전환 및 작업
-                        sh 'git checkout -b main' 
+                        sh 'git checkout main' 
                         
                         // 3. yq를 사용하여 YAML 파일 내 이미지 필드 업데이트
                         sh "yq e '.spec.template.spec.containers[0].image = \"${FULL_IMAGE_NAME}\"' -i ${GITOPS_FILE_PATH}" 
