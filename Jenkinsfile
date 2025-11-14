@@ -59,42 +59,42 @@ pipeline {
         }
         
         stage('Update GitHub Tag (Manual)') {
-            steps {
-                // withCredentials 블록을 dir 안에 배치하여, 이 안에서 Git 인증 정보를 사용합니다.
-                withCredentials([usernamePassword(credentialsId: "${GITOPS_CREDENTIAL_ID}", 
-                                                   passwordVariable: 'GITOPS_TOKEN', 
-                                                   usernameVariable: 'GITOPS_USERNAME')]) {
-                    dir("${GITOPS_WORKSPACE}") {
-                        
-                        // 1. (생략) GitHub 레포지토리 체크아웃은 이미 성공했습니다.
-                        // (checkout 스텝은 withCredentials 바깥에 있어도 무방하지만, 이 경우 URL이 HTTPS여야 합니다.)
-                        // 현재 GITOPS_REPO_URL이 HTTPS라고 가정하고 진행합니다.
-                        // GITOPS_REPO_URL = 'https://github.com/BansonJ/gitOps.git' 여야 합니다.
-                        
-                        // 2. 브랜치 전환 및 작업
-                        sh 'git checkout main' 
-                        
-                        // 3. yq를 사용하여 YAML 파일 내 이미지 필드 업데이트
-                        sh "yq e '.spec.template.spec.containers[0].image = \"${FULL_IMAGE_NAME}\"' -i ${GITOPS_FILE_PATH}" 
-                        
-                        // 4. 변경 사항 커밋
-                        sh 'git config user.email "wjdtmdgus0313@gmail.com"'
-                        sh 'git config user.name "Banson"'
-                        sh "git add ${GITOPS_FILE_PATH}"
-                        sh 'git diff-index --quiet HEAD || git commit -m "CI: Update image tag to ${IMAGE_TAG}"'
-
-                        // ⭐⭐⭐ 5. GIT_ASKPASS를 사용하여 푸시 (핵심 수정 사항) ⭐⭐⭐
-                        // Jenkins Credentials Binding Plugin이 제공하는 방식으로 인증을 처리합니다.
-                        sh """
-                        # GIT_ASKPASS를 사용하여 자격 증명(사용자명/토큰)을 자동으로 제공합니다.
-                        GIT_ASKPASS="/usr/bin/echo" git push https://${GITOPS_USERNAME}:${GITOPS_TOKEN}@github.com/BansonJ/gitOps.git main
-                        """
-                        
-                        echo "Changes pushed to GitHub. ArgoCD will now sync."
-                    }
-                }
-            }
-        }
+				    steps {
+				        // withCredentials 블록을 dir 안에 배치하여, 이 안에서 Git 인증 정보를 사용합니다.
+				        withCredentials([usernamePassword(credentialsId: "${GITOPS_CREDENTIAL_ID}", 
+				                                           passwordVariable: 'GITOPS_TOKEN', 
+				                                           usernameVariable: 'GITOPS_USERNAME')]) {
+				            dir("${GITOPS_WORKSPACE}") {
+				                
+				                // 1. 브랜치 전환
+				                sh 'git checkout main' 
+				                
+				                // 2. yq를 사용하여 YAML 파일 내 이미지 필드 업데이트
+				                sh "yq e '.spec.template.spec.containers[0].image = \"${FULL_IMAGE_NAME}\"' -i ${GITOPS_FILE_PATH}" 
+				                
+				                // 3. 변경 사항 커밋
+				                sh 'git config user.email "wjdtmdgus0313@gmail.com"'
+				                sh 'git config user.name "Banson"'
+				                sh "git add ${GITOPS_FILE_PATH}"
+				                
+				                // 변경 사항이 있을 때만 커밋
+				                sh 'git diff-index --quiet HEAD || git commit -m "CI: Update image tag to ${IMAGE_TAG}"'
+				
+				                // ⭐⭐ 4. Pull --rebase 추가 (충돌 해결) ⭐⭐
+				                sh '''
+				                    echo "Pulling latest changes before push to prevent rejection..."
+				                    git pull --rebase origin main
+				                '''
+				
+				                // ⭐⭐ 5. PAT를 URL에 포함하여 푸시 (인증 해결) ⭐⭐
+				                // 경고를 피하기 위해 Groovy String 대신 Shell String ('') 내에서 변수를 직접 사용합니다.
+				                sh "git push https://${GITOPS_USERNAME}:${GITOPS_TOKEN}@github.com/BansonJ/gitOps.git main"
+				                
+				                echo "Changes pushed to GitHub. ArgoCD will now sync."
+				            }
+				        }
+				    }
+				}
 
         stage('Cleanup') {
              steps {
