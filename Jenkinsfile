@@ -1,3 +1,4 @@
+# 도커 빌드 및 레포추가
 pipeline {
     agent any
 
@@ -14,11 +15,16 @@ pipeline {
         FULL_IMAGE_NAME = "${DOCKER_REGISTRY}:${IMAGE_TAG}" 
         
         DOCKER_CREDENTIAL_ID = 'docker_key'
+        
+        GITOPS_REPO_URL = 'https://github.com/BansonJ/gitOps.git' // <-- GitOps 레포지토리 URL로 변경하세요
+        GITOPS_BRANCH = 'main' // <-- GitOps 레포지토리의 브랜치로 변경하세요
+        GITOPS_CREDENTIAL_ID = 'github_key' // <-- GitOps 레포지토리에 푸시할 권한이 있는 Jenkins Credential ID로 변경하세요 (일반적으로 SSH Key 또는 Username/Password)
+        GITOPS_FILE_PATH = 'app-deployment.yaml' // <-- 태그를 변경할 파일 경로로 변경하세요 (예시)
+        GITOPS_WORKSPACE = 'gitops-work'
     }
 
     stages {
-        // ... (Checkout Source Code 단계는 동일)
-
+    
         stage('Build Docker Image') {
             steps {
                 script {
@@ -49,6 +55,37 @@ pipeline {
                     // (선택) latest 태그 푸시
                     sh "docker tag ${FULL_IMAGE_NAME} ${DOCKER_REGISTRY}:latest"
                     sh "docker push ${DOCKER_REGISTRY}:latest"
+                }
+            }
+        }
+        
+        stage('Update GitHub Tag') {
+            steps {
+                dir("${GITOPS_WORKSPACE}") {
+                    echo "Checking out GitHub GitOps repository: ${GITOPS_REPO_URL}"
+                    
+                    // 1. GitHub 레포지토리 체크아웃
+                    checkout([
+                        $class: 'GitSCM', 
+                        branches: [[name: "${GITOPS_BRANCH}"]], 
+                        userRemoteConfigs: [[credentialsId: "${GITOPS_CREDENTIAL_ID}", url: "${GITOPS_REPO_URL}"]],
+                        changelog: false, poll: false
+                    ])
+                    
+                    // 2. yq를 사용하여 YAML 파일 내 이미지 필드 업데이트
+                    // 경로: spec -> template -> spec -> containers[0] -> image
+                    echo "Updating image in ${GITOPS_FILE_PATH} to ${FULL_IMAGE_NAME}"
+                    // ${DOCKER_REGISTRY}와 ${IMAGE_TAG}를 합쳐서 전체 이미지 문자열을 대체합니다.
+                    sh "yq e '.spec.template.spec.containers[0].image = \"${FULL_IMAGE_NAME}\"' -i ${GITOPS_FILE_PATH}" 
+                    
+                    // 3. 변경 사항 커밋 및 GitHub에 푸시
+                    sh 'git config user.email "wjdtmdgus0313@gmail.com"'
+                    sh 'git config user.name "Banson"'
+                    
+                    sh "git add ${GITOPS_FILE_PATH}"
+                    sh 'git diff-index --quiet HEAD || (git commit -m "CI: Update image tag to ${IMAGE_TAG}" && git push origin ${GITOPS_BRANCH})'
+                    
+                    echo "Changes pushed to GitHub. ArgoCD will now sync."
                 }
             }
         }
