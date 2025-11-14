@@ -70,6 +70,7 @@ pipeline {
                         userRemoteConfigs: [[credentialsId: "${GITOPS_CREDENTIAL_ID}", url: "${GITOPS_REPO_URL}"]],
                         changelog: false, poll: false
                     ])
+		    sh 'git checkout -b main'
                     
                     // 2. yq를 사용하여 YAML 파일 내 이미지 필드 업데이트
                     // 경로: spec -> template -> spec -> containers[0] -> image
