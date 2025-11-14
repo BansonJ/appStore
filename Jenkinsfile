@@ -1,4 +1,3 @@
-# 도커 빌드 및 레포추가
 pipeline {
     agent any
 
